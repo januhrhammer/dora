@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+*.db
+*.sqlite
+
+# Node
+node_modules/
+dist/
+.npm
+
+# Environment variables
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+.github/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+medicine.db
+
+# Logs
+*.log
+npm-debug.log*

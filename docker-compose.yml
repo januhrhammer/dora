@@ -1,0 +1,52 @@
+# Docker Compose configuration for Medicine Tracker
+# This file defines how to run both backend and frontend containers together
+
+version: '3.8'
+
+services:
+  # Backend API service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medicine-tracker-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount a named volume for the SQLite database to persist data
+      # This ensures the database persists even when containers are recreated
+      - medicine-data:/app/data
+    environment:
+      # Mailjet configuration (get keys from https://app.mailjet.com/account/apikeys)
+      - MAILJET_API_KEY=${MAILJET_API_KEY}
+      - MAILJET_API_SECRET=${MAILJET_API_SECRET}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - FROM_NAME=${FROM_NAME:-Medicine Tracker}
+      - TO_EMAIL=${TO_EMAIL}
+      - TO_NAME=${TO_NAME:-}
+    restart: unless-stopped
+    networks:
+      - medicine-network
+
+  # Frontend web service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medicine-tracker-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - medicine-network
+
+networks:
+  medicine-network:
+    driver: bridge
+
+volumes:
+  # Named volume for database persistence
+  # Data stored here persists across container restarts and rebuilds
+  medicine-data:
