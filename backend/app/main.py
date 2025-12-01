@@ -5,10 +5,11 @@ This is the entry point of the backend API. It defines all the HTTP endpoints
 for managing drugs and sets up scheduled email reminders.
 """
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
@@ -24,6 +25,14 @@ if env_path.exists():
 from . import models, schemas, crud
 from .database import engine, get_db
 from .email_service import email_service
+from .auth import (
+    authenticate_user,
+    create_access_token,
+    get_current_user,
+    Token,
+    LoginRequest,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
 
 # Database tables are managed by Alembic migrations
 # To apply migrations, run: alembic upgrade head
@@ -122,8 +131,40 @@ async def root():
     return {"message": "Medicine Tracker API is running"}
 
 
+@app.post("/login", response_model=Token)
+async def login(login_data: LoginRequest):
+    """
+    Login endpoint for authentication.
+
+    Args:
+        login_data (LoginRequest): Username and password.
+
+    Returns:
+        Token: JWT access token.
+
+    Raises:
+        HTTPException: 401 if credentials are invalid.
+    """
+    if not authenticate_user(login_data.username, login_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_access_token(
+        data={"sub": login_data.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 @app.post("/drugs/", response_model=schemas.DrugResponse, status_code=201)
-async def create_drug(drug: schemas.DrugCreate, db: Session = Depends(get_db)):
+async def create_drug(
+    drug: schemas.DrugCreate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Create a new drug in the system.
 
@@ -138,7 +179,12 @@ async def create_drug(drug: schemas.DrugCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/drugs/", response_model=List[schemas.DrugResponse])
-async def get_drugs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+async def get_drugs(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Get all drugs.
 
@@ -154,7 +200,11 @@ async def get_drugs(skip: int = 0, limit: int = 100, db: Session = Depends(get_d
 
 
 @app.get("/drugs/{drug_id}", response_model=schemas.DrugResponse)
-async def get_drug(drug_id: int, db: Session = Depends(get_db)):
+async def get_drug(
+    drug_id: int,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Get a specific drug by ID.
 
@@ -176,7 +226,10 @@ async def get_drug(drug_id: int, db: Session = Depends(get_db)):
 
 @app.put("/drugs/{drug_id}", response_model=schemas.DrugResponse)
 async def update_drug(
-    drug_id: int, drug_update: schemas.DrugUpdate, db: Session = Depends(get_db)
+    drug_id: int,
+    drug_update: schemas.DrugUpdate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     """
     Update a drug's information.
@@ -199,7 +252,11 @@ async def update_drug(
 
 
 @app.delete("/drugs/{drug_id}", status_code=204)
-async def delete_drug(drug_id: int, db: Session = Depends(get_db)):
+async def delete_drug(
+    drug_id: int,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Delete a drug from the system.
 
@@ -221,7 +278,10 @@ async def delete_drug(drug_id: int, db: Session = Depends(get_db)):
 
 @app.post("/drugs/{drug_id}/refill", response_model=schemas.DrugResponse)
 async def refill_drug(
-    drug_id: int, refill: schemas.DrugRefill, db: Session = Depends(get_db)
+    drug_id: int,
+    refill: schemas.DrugRefill,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     """
     Refill a drug (add packages).
@@ -244,7 +304,10 @@ async def refill_drug(
 
 
 @app.get("/drugs-status/reorder", response_model=List[schemas.DrugResponse])
-async def get_drugs_needing_reorder(db: Session = Depends(get_db)):
+async def get_drugs_needing_reorder(
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Get drugs that need reordering (< 3 weeks remaining).
 
@@ -258,7 +321,7 @@ async def get_drugs_needing_reorder(db: Session = Depends(get_db)):
 
 
 @app.post("/test-email")
-async def send_test_email():
+async def send_test_email(current_user: str = Depends(get_current_user)):
     """
     Send a test email to verify email configuration.
 
@@ -273,7 +336,10 @@ async def send_test_email():
 
 
 @app.post("/send-weekly-reminder")
-async def trigger_weekly_reminder(db: Session = Depends(get_db)):
+async def trigger_weekly_reminder(
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Manually trigger the weekly reminder email.
 
@@ -294,7 +360,10 @@ async def trigger_weekly_reminder(db: Session = Depends(get_db)):
 
 
 @app.post("/send-reorder-reminder")
-async def trigger_reorder_reminder(db: Session = Depends(get_db)):
+async def trigger_reorder_reminder(
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Manually trigger the reorder reminder email.
 
@@ -326,7 +395,9 @@ async def trigger_reorder_reminder(db: Session = Depends(get_db)):
 
 @app.post("/doctor-vacations/", response_model=schemas.DoctorVacationResponse)
 def create_doctor_vacation(
-    vacation: schemas.DoctorVacationCreate, db: Session = Depends(get_db)
+    vacation: schemas.DoctorVacationCreate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     """
     Create a new doctor vacation period.
@@ -342,7 +413,12 @@ def create_doctor_vacation(
 
 
 @app.get("/doctor-vacations/", response_model=List[schemas.DoctorVacationResponse])
-def get_doctor_vacations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_doctor_vacations(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Get all doctor vacation periods.
 
@@ -358,7 +434,10 @@ def get_doctor_vacations(skip: int = 0, limit: int = 100, db: Session = Depends(
 
 
 @app.get("/doctor-vacations/current", response_model=schemas.DoctorVacationResponse | None)
-def get_current_doctor_vacation(db: Session = Depends(get_db)):
+def get_current_doctor_vacation(
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Get the current doctor vacation (if doctor is on vacation today).
 
@@ -372,7 +451,11 @@ def get_current_doctor_vacation(db: Session = Depends(get_db)):
 
 
 @app.get("/doctor-vacations/{vacation_id}", response_model=schemas.DoctorVacationResponse)
-def get_doctor_vacation(vacation_id: int, db: Session = Depends(get_db)):
+def get_doctor_vacation(
+    vacation_id: int,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Get a specific doctor vacation period.
 
@@ -394,7 +477,10 @@ def get_doctor_vacation(vacation_id: int, db: Session = Depends(get_db)):
 
 @app.put("/doctor-vacations/{vacation_id}", response_model=schemas.DoctorVacationResponse)
 def update_doctor_vacation(
-    vacation_id: int, vacation: schemas.DoctorVacationUpdate, db: Session = Depends(get_db)
+    vacation_id: int,
+    vacation: schemas.DoctorVacationUpdate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     """
     Update a doctor vacation period.
@@ -417,7 +503,11 @@ def update_doctor_vacation(
 
 
 @app.delete("/doctor-vacations/{vacation_id}")
-def delete_doctor_vacation(vacation_id: int, db: Session = Depends(get_db)):
+def delete_doctor_vacation(
+    vacation_id: int,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     """
     Delete a doctor vacation period.
 

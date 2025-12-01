@@ -19,6 +19,28 @@ const api = axios.create({
   },
 });
 
+// Add authentication interceptor
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Add response interceptor to handle 401 errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Clear token and redirect to login
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 /**
  * Drug API functions
  */
@@ -190,5 +212,42 @@ export const vacationApi = {
    */
   async delete(id) {
     await api.delete(`/doctor-vacations/${id}`);
+  },
+};
+
+/**
+ * Authentication API functions
+ */
+export const authApi = {
+  /**
+   * Login with username and password.
+   *
+   * @param {string} username - The username.
+   * @param {string} password - The password.
+   * @returns {Promise<Object>} Token response.
+   */
+  async login(username, password) {
+    const response = await api.post('/login', { username, password });
+    // Store token in localStorage
+    if (response.data.access_token) {
+      localStorage.setItem('auth_token', response.data.access_token);
+    }
+    return response.data;
+  },
+
+  /**
+   * Logout and clear stored token.
+   */
+  logout() {
+    localStorage.removeItem('auth_token');
+  },
+
+  /**
+   * Check if user is authenticated.
+   *
+   * @returns {boolean} True if token exists.
+   */
+  isAuthenticated() {
+    return !!localStorage.getItem('auth_token');
   },
 };

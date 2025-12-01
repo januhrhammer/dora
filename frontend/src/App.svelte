@@ -4,6 +4,7 @@
  *
  * This is the root component of the medicine tracker application.
  * It manages the entire UI including:
+ * - Authentication check
  * - Displaying all drugs in the medicine plan
  * - Adding new drugs
  * - Editing existing drugs
@@ -19,7 +20,11 @@
  */
 
 import { onMount } from 'svelte';
-import { drugApi, reminderApi, vacationApi } from './lib/api';
+import { drugApi, reminderApi, vacationApi, authApi } from './lib/api';
+import Login from './Login.svelte';
+
+// Authentication state
+let isAuthenticated = authApi.isAuthenticated();
 
 // State variables
 let drugs = [];
@@ -302,17 +307,38 @@ $: nextVacation = vacations
   .filter(v => v.is_upcoming)
   .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))[0] || null;
 
-// Load drugs and vacations when component mounts
+/**
+ * Logout user
+ */
+function logout() {
+  if (confirm('Möchten Sie sich wirklich abmelden?')) {
+    authApi.logout();
+    isAuthenticated = false;
+    window.location.reload();
+  }
+}
+
+// Load drugs and vacations when component mounts (only if authenticated)
 onMount(() => {
-  loadDrugs();
-  loadVacations();
+  if (isAuthenticated) {
+    loadDrugs();
+    loadVacations();
+  }
 });
 </script>
 
+{#if !isAuthenticated}
+  <Login />
+{:else}
 <main>
   <header>
-    <h1>💊 Medikamenten-Tracker</h1>
-    <p>Medikamente verwalten und Nachbestellungen im Blick behalten</p>
+    <div class="header-content">
+      <div class="header-title">
+        <h1>💊 Medikamenten-Tracker</h1>
+        <p>Medikamente verwalten und Nachbestellungen im Blick behalten</p>
+      </div>
+      <button class="btn-logout" on:click={logout}>Abmelden</button>
+    </div>
   </header>
 
   {#if error}
@@ -1452,5 +1478,54 @@ onMount(() => {
     h1 {
       font-size: 2rem;
     }
+
+    .header-content {
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-title {
+      text-align: center;
+    }
+  }
+
+  /* Header styles */
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .header-title {
+    flex: 1;
+  }
+
+  .header-title h1 {
+    text-align: left;
+  }
+
+  .header-title p {
+    text-align: left;
+  }
+
+  .btn-logout {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-logout:hover {
+    background: white;
+    color: #667eea;
   }
 </style>
+{/if}
