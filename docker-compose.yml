@@ -11,7 +11,7 @@ services:
       dockerfile: Dockerfile
     container_name: medicine-tracker-backend
     ports:
-      - "8000:8000"
+      - "9000:8000"
     volumes:
       # Mount a named volume for the SQLite database to persist data
       # This ensures the database persists even when containers are recreated
@@ -35,7 +35,7 @@ services:
       dockerfile: Dockerfile
     container_name: medicine-tracker-frontend
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       - backend
     restart: unless-stopped

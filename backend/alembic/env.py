@@ -16,6 +16,17 @@ from app import models  # Import models to register them with Base
 # access to the values within the .ini file in use.
 config = context.config
 
+# Override database URL to match production environment
+# Use same logic as app.database to determine correct path
+data_dir = Path("data")
+if data_dir.exists() and data_dir.is_dir():
+    # Docker environment with mounted volume
+    db_path = "data/medicine.db"
+else:
+    # Local development
+    db_path = "medicine.db"
+config.set_main_option("sqlalchemy.url", f"sqlite:///./{db_path}")
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
